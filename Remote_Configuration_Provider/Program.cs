@@ -2,6 +2,7 @@
 using Spectre.Console;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 var app = new CommandApp<FileSizeCommand>();
 return app.Run(args);
@@ -24,23 +25,39 @@ internal sealed class FileSizeCommand : Command<FileSizeCommand.Settings>
 
     public override int Execute([NotNull] CommandContext context, [NotNull] Settings settings)
     {
-        var searchOptions = new EnumerationOptions
+        var appName = Assembly.GetEntryAssembly().GetName().Name;
+        var notAlreadyRunning = true;
+        using (var mutex = new Mutex(true, appName + "_Singleton", out notAlreadyRunning))
         {
-            AttributesToSkip = settings.IncludeHidden
-                ? FileAttributes.Hidden | FileAttributes.System
-                : FileAttributes.System
-        };
+            if (notAlreadyRunning)
+            {
+                var searchOptions = new EnumerationOptions
+                {
+                    AttributesToSkip = settings.IncludeHidden
+                    ? FileAttributes.Hidden | FileAttributes.System
+                    : FileAttributes.System
+                };
 
-        var searchPattern = settings.SearchPattern ?? "*.*";
-        var searchPath = settings.SearchPath ?? Directory.GetCurrentDirectory();
-        var files = new DirectoryInfo(searchPath)
-            .GetFiles(searchPattern, searchOptions);
+                var searchPattern = settings.SearchPattern ?? "*.*";
+                var searchPath = settings.SearchPath ?? Directory.GetCurrentDirectory();
+                var files = new DirectoryInfo(searchPath)
+                    .GetFiles(searchPattern, searchOptions);
 
-        var totalFileSize = files
-            .Sum(fileInfo => fileInfo.Length);
+                var totalFileSize = files
+                    .Sum(fileInfo => fileInfo.Length);
 
-        AnsiConsole.MarkupLine($"Total file size for [green]{searchPattern}[/] files in [green]{searchPath}[/]: [blue]{totalFileSize:N0}[/] bytes");
+                AnsiConsole.MarkupLine($"Total file size for [green]{searchPattern}[/] files in [green]{searchPath}[/]: [blue]{totalFileSize:N0}[/] bytes");
+
+                Console.ReadLine();
+            }
+            else
+            {
+                AnsiConsole.MarkupLine(appName + " is already running.");
+            }
+        }
 
         return 0;
+
+
     }
 }
